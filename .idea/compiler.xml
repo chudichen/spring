@@ -2,16 +2,10 @@
 <project version="4">
   <component name="CompilerConfiguration">
     <bytecodeTargetLevel>
-      <module name="spring.spring-beans.main" target="1.8" />
-      <module name="spring.spring-beans.test" target="1.8" />
-      <module name="spring.spring-context.main" target="1.8" />
-      <module name="spring.spring-context.test" target="1.8" />
-      <module name="spring.spring-core.main" target="1.8" />
-      <module name="spring.spring-core.test" target="1.8" />
-      <module name="spring.spring-jcl.main" target="1.8" />
-      <module name="spring.spring-jcl.test" target="1.8" />
+      <module name="spring.main" target="1.8" />
       <module name="spring.spring-test.main" target="1.8" />
       <module name="spring.spring-test.test" target="1.8" />
+      <module name="spring.test" target="1.8" />
     </bytecodeTargetLevel>
   </component>
 </project>

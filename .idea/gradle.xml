@@ -8,13 +8,15 @@
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/build" />
+            <option value="$PROJECT_DIR$/buildSrc" />
             <option value="$PROJECT_DIR$/spring-beans" />
             <option value="$PROJECT_DIR$/spring-context" />
+            <option value="$PROJECT_DIR$/spring-core" />
             <option value="$PROJECT_DIR$/spring-jcl" />
             <option value="$PROJECT_DIR$/spring-test" />
           </set>
         </option>
+        <option name="useAutoImport" value="true" />
         <option name="useQualifiedModuleNames" value="true" />
       </GradleProjectSettings>
     </option>
