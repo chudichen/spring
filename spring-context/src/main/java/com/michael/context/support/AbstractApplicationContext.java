@@ -42,11 +42,55 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
     @Override
     public void refresh() throws BeansException, IllegalStateException {
         synchronized (this.startupShudownMonitor) {
+            // 准备刷新的上下文环境
             prepareRefresh();
 
+            // 初始化BeanFactory，并进行XML文件读取
             ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
 
+            // 对BeanFactory进行各种功能填充
             prepareBeanFactory(beanFactory);
+
+            try {
+
+                // 子类覆盖方法做额外的处理
+                postProcessBeanFactory(beanFactory);
+
+                // 激活各种BeanFactory处理器
+                invokeBeanFactoryPostProcessors(beanFactory);
+
+                // 注册拦截Bean创建的Bean处理器，这里只是注册，真正的调用是在getBean的时候
+                registerBeanPostProcessors(beanFactory);
+
+                // 为上下文初始化Message源，即不同语言的消息体，国际化处理
+                initMessageSource();
+
+                // 初始化应用消息广播器，并放入"applicationEventMulticaster"bean中
+                initApplicationEventMulticaster();
+
+                // 留给子类来初始化其他的Bean
+                onRefresh();
+
+                // 在所有注册的bean中查找Listener bean，注册到广播器中
+                registerListeners();
+
+                //初始化剩下的单实例（非惰性的）
+                finishBeanFactoryInitialization(beanFactory);
+
+                // 完成刷新过程，通知生命周期处理器lifecycleProcessor刷新过程，同时发出
+                // ContextRefreshEvent通知别人
+                finishRefresh();
+            } catch (BeansException ex) {
+
+                // 销毁已经创建的单例实力来避免消耗多余的资源
+                destroyBeans();
+
+                // 重置'active'的状态
+                cancelRefresh(ex);
+
+                // 传播异常给调用者
+                throw ex;
+            }
         }
     }
 
