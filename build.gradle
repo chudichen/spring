@@ -1,0 +1,20 @@
+apply plugin : 'java'
+
+group 'com.michael'
+description 'spring project'
+
+sourceCompatibility = 11
+targetCompatibility = 11
+
+repositories{
+    mavenCentral()
+}
+
+dependencies {
+    compile 'javax.servlet:servlet-api:2.5'
+    compile 'com.google.code.findbugs:jsr305:2.0.1'
+}
+
+this.subprojects { Project project ->
+    project.setGroup(this.group)
+}

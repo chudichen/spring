@@ -7,4 +7,24 @@ sourceCompatibility = 11
 
 dependencies {
     compile(project(":spring-core"))
+    compile(project(":spring-beans"))
+}
+
+
+task taskX {
+    doLast {
+        println 'taskX'
+    }
+}
+
+task taskY {
+    doLast {
+        println 'taskY'
+    }
+}
+
+task taskZ(dependsOn: [taskX, taskY]) {
+    doLast {
+        println 'taskZ'
+    }
 }
