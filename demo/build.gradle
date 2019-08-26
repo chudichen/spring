@@ -1,0 +1,19 @@
+plugins {
+    id 'java'
+}
+
+group 'com.michael'
+version 'unspecified'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile(project(":spring-beans"))
+    compile(project(":spring-core"))
+    compile(project(":spring-context"))
+    compile(project(":spring-jcl"))
+}

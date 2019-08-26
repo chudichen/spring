@@ -16,6 +16,8 @@ spring-test/test-output/
 argfile*
 pom.xml
 activemq-data/
+gradle
+gradlew*
 
 classes/
 /build

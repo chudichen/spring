@@ -5,6 +5,7 @@ import com.michael.beans.factory.config.AutowireCapableBeanFactory;
 import com.michael.beans.factory.config.ConfigurableListableBeanFactory;
 import com.michael.context.ApplicationContext;
 import com.michael.context.ConfigurableApplicationContext;
+import com.michael.context.expression.StandardBeanExpressionResolver;
 import com.michael.core.env.ConfigurableEnvironment;
 import com.michael.core.env.StandardEnvironment;
 import com.michael.core.io.DefaultResourceLoader;
@@ -16,6 +17,10 @@ import com.michael.lang.Nullable;
  */
 public abstract class AbstractApplicationContext extends DefaultResourceLoader
         implements ConfigurableApplicationContext {
+
+    public static final String MESSAGE_SOURCE_BEAN_NAME = "messageSource";
+
+    public static final String LIFECYCLE_PROCESSOR_BEAN_NAME = "lifecycleProcessor";
 
     @Nullable
     private ConfigurableEnvironment environment;

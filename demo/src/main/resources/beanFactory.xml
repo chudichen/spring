@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans>
+	<bean id="myTestBean" class="com.michael.demo.MyTestBean">
+		<meta key="testStr" value="hello world"/>
+	</bean>
+</beans>

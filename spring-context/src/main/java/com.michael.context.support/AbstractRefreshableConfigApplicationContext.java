@@ -1,5 +1,8 @@
 package com.michael.context.support;
 
+import com.michael.beans.factory.BeanNameAware;
+import com.michael.beans.factory.InitializingBean;
+import com.michael.context.ApplicationContext;
 import com.michael.util.Assert;
 import com.michael.lang.Nullable;
 
@@ -7,10 +10,20 @@ import com.michael.lang.Nullable;
  * @author Michael Chu
  * @since 2019-08-22 20:47
  */
-public abstract class AbstractRefreshableConfigApplicationContext extends AbstractRefreshableApplicationContext {
+public abstract class AbstractRefreshableConfigApplicationContext extends AbstractRefreshableApplicationContext
+        implements BeanNameAware, InitializingBean {
 
     @Nullable
     private String[] configLocations;
+
+    private boolean setIdCalled = false;
+
+    public AbstractRefreshableConfigApplicationContext() {
+    }
+
+    public AbstractRefreshableConfigApplicationContext(@Nullable ApplicationContext parent) {
+        super(parent);
+    }
 
     /**
      * 为应用设置配置文件的地址，如果没有设置则使用默认模式的
