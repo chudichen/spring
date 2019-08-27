@@ -14,5 +14,9 @@ public interface BeanFactory {
 
     Object getBean(String name) throws BeansException;
 
+    <T> T getBean(String name, Class<T> requireType) throws BeansException;
+
     boolean containsBean(String name);
+
+    boolean isTypeMatch(String name, Class<?> typeToMatch) throws NoSuchBeanDefinitionException;
 }

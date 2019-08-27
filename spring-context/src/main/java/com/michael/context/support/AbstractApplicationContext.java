@@ -2,6 +2,7 @@ package com.michael.context.support;
 
 import com.michael.beans.BeansException;
 import com.michael.beans.factory.config.AutowireCapableBeanFactory;
+import com.michael.beans.factory.config.BeanFactoryPostProcessor;
 import com.michael.beans.factory.config.ConfigurableListableBeanFactory;
 import com.michael.context.ApplicationContext;
 import com.michael.context.ConfigurableApplicationContext;
@@ -10,6 +11,9 @@ import com.michael.core.env.ConfigurableEnvironment;
 import com.michael.core.env.StandardEnvironment;
 import com.michael.core.io.DefaultResourceLoader;
 import com.michael.lang.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Michael Chu
@@ -25,7 +29,9 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
     @Nullable
     private ConfigurableEnvironment environment;
 
-    private final Object startupShudownMonitor = new Object();
+    private final Object startupShutdownMonitor = new Object();
+
+    private final List<BeanFactoryPostProcessor> beanFactoryPostProcessors = new ArrayList<>();
 
     @Override
     public ConfigurableEnvironment getEnvironment() {
@@ -41,7 +47,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 
     @Override
     public void refresh() throws BeansException, IllegalStateException {
-        synchronized (this.startupShudownMonitor) {
+        synchronized (this.startupShutdownMonitor) {
             // 准备刷新的上下文环境
             prepareRefresh();
 
@@ -93,6 +99,19 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
             }
         }
     }
+
+    protected void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
+
+    }
+
+    protected void invokeBeanFactoryPostProcessors(ConfigurableListableBeanFactory beanFactory) {
+        PostProcessorRegistrationDelegate.invokeBeanFactoryPostProcessors(beanFactory, getBeanFactoryPostProcessors());
+    }
+
+    public List<BeanFactoryPostProcessor> getBeanFactoryPostProcessors() {
+        return this.beanFactoryPostProcessors;
+    }
+
 
     protected ConfigurableListableBeanFactory obtainFreshBeanFactory() {
         refreshBeanFactory();

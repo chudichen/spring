@@ -4,7 +4,8 @@ include 'spring-core'
 include 'spring-context'
 include 'spring-jcl'
 include 'spring-test'
-
+include 'demo'
+include 'spring-expression'
 
 // Exposes gradle buildSrc for IDE support
 include "buildSrc"
@@ -14,5 +15,5 @@ rootProject.name = "spring"
 rootProject.children.each {project ->
     project.buildFileName = "${project.name}.gradle"
 }
-include 'demo'
+
 

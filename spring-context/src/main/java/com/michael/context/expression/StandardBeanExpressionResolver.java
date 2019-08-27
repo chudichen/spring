@@ -20,6 +20,12 @@ public class StandardBeanExpressionResolver implements BeanExpressionResolver {
 
     private String expressionSuffix = DEFAULT_EXPRESSION_SUFFIX;
 
+    private ExpressionParser expressionParser;
+
+    public StandardBeanExpressionResolver(@Nullable ClassLoader beanClassLoader) {
+
+    }
+
     @Override
     @Nullable
     public Object evaluate(@Nullable String value, BeanExpressionContext evalContext) throws BeansException {

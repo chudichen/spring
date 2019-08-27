@@ -17,6 +17,8 @@ public interface ConfigurableListableBeanFactory
 
     void registerResolvableDependency(Class<?> dependencyType, @Nullable Object autowiredValue);
 
+    void setBeanExpressionResolver(@Nullable BeanExpressionResolver resolver);
+
     boolean isAutowireCandidate(String beanName, DependencyDescriptor descriptor)
             throws NoSuchBeanDefinitionException;
 }
