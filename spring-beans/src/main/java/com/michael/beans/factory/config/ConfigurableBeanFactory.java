@@ -17,4 +17,6 @@ public interface ConfigurableBeanFactory extends HierarchicalBeanFactory, Single
 
     @Nullable
     ClassLoader getBeanClassLoader();
+
+    void destroySingletons();
 }

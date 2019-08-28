@@ -10,11 +10,26 @@ repositories{
     mavenCentral()
 }
 
+ext {
+    moduleProjects = subprojects.findAll {
+        (it.name != "spring-build-src") && (it.name != "spring-framework-bom") && (it.name != "spring-core-coroutines")
+    }
+
+    slf4jVersion         = "1.7.26"
+    log4jVersion         = "2.12.0"
+    junit5Version        = "5.5.0"
+
+    gradleScriptDir = "${rootProject.projectDir}/gradle"
+}
+
+configure(allprojects) { project ->
+    group = "com.michael"
+    version = "1.0.0"
+
+    apply plugin: "java"
+}
+
 dependencies {
     compile 'javax.servlet:servlet-api:2.5'
     compile 'com.google.code.findbugs:jsr305:2.0.1'
-}
-
-this.subprojects { Project project ->
-    project.setGroup(this.group)
 }
