@@ -1,6 +1,7 @@
 package com.michael.context.support;
 
 import com.michael.beans.factory.config.BeanFactoryPostProcessor;
+import com.michael.beans.factory.config.BeanPostProcessor;
 import com.michael.beans.factory.config.ConfigurableListableBeanFactory;
 import com.michael.beans.factory.support.BeanDefinitionRegistry;
 import com.michael.beans.factory.support.BeanDefinitionRegistryPostProcessor;
@@ -52,5 +53,13 @@ final class PostProcessorRegistrationDelegate {
                 }
             }
         }
+    }
+
+    public static void registerBeanPostProcessors(
+            ConfigurableListableBeanFactory beanFactory, AbstractApplicationContext applicationContext) {
+
+        String[] postProcessorNames = beanFactory.getBeanNamesForType(BeanPostProcessor.class, true, false);
+
+        int beanProcessorTargetCount = beanFactory.getBeanPostProcessorCount() + 1 + postProcessorNames.length;
     }
 }

@@ -179,8 +179,40 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
         }
     }
 
+    protected void cancelRefresh(BeansException ex) {
+        this.active.set(false);
+    }
+
+    protected void finishRefresh() {
+
+    }
+
+    protected void finishBeanFactoryInitialization(ConfigurableListableBeanFactory beanFactory) {
+
+    }
+
+    protected void initMessageSource() {
+
+    }
+
+    protected void registerListeners() {
+
+    }
+
+    protected void onRefresh() throws BeansException {
+        // For subclasses: do nothing by default.
+    }
+
+    protected void initApplicationEventMulticaster() {
+
+    }
+
     protected void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
 
+    }
+
+    protected void registerBeanPostProcessors(ConfigurableListableBeanFactory beanFactory) {
+        PostProcessorRegistrationDelegate.registerBeanPostProcessors(beanFactory, this);
     }
 
     protected void invokeBeanFactoryPostProcessors(ConfigurableListableBeanFactory beanFactory) {

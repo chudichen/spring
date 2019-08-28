@@ -5,4 +5,7 @@ package com.michael.core.env;
  * @since 2019-08-23 10:32
  */
 public interface ConfigurableEnvironment extends Environment, ConfigurablePropertyResolver {
+
+
+    void merge(ConfigurableEnvironment parent);
 }

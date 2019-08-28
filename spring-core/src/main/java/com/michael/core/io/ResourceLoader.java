@@ -13,4 +13,6 @@ public interface ResourceLoader {
 
     @Nullable
     ClassLoader getClassLoader();
+
+    Resource getResource(String location);
 }

@@ -1,6 +1,8 @@
 package com.michael.core.io.support;
 
+import com.michael.core.io.ResourceLoader;
 import com.michael.lang.Nullable;
+import com.michael.util.Assert;
 
 import java.lang.reflect.Method;
 
@@ -13,8 +15,15 @@ public class PathMatchingResourcePatternResolver implements ResourcePatternResol
     @Nullable
     private static Method equinoxResolveMethod;
 
+    private final ResourceLoader resourceLoader;
+
     @Override
     public ClassLoader getClassLoader() {
         return null;
+    }
+
+    public PathMatchingResourcePatternResolver(ResourceLoader resourceLoader) {
+        Assert.notNull(resourceLoader, "ResourceLoader must not be null");
+        this.resourceLoader = resourceLoader;
     }
 }

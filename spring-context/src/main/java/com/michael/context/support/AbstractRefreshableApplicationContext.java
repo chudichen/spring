@@ -68,10 +68,19 @@ public abstract class AbstractRefreshableApplicationContext extends AbstractAppl
         }
     }
 
+    /**
+     * 对BeanFactory进行扩展，在基本容器的基础上，增加了是否允许覆盖
+     *
+     * @param beanFactory
+     */
     protected void customizeBeanFactory(DefaultListableBeanFactory beanFactory) {
+        // 如果属性allowBeanDefinitionOverriding不为空，设置给beanFactory对象相应属性，
+        // 此属性的含义：是否允许覆盖同名称的不同定义的对象
         if (this.allowBeanDefinitionOverriding != null) {
             beanFactory.setAllowBeanDefinitionOverriding(this.allowBeanDefinitionOverriding);
         }
+        // 如果allowCircularReferences不为空，设置给beanFactory对象相应的属性，
+        // 此属性的含义：是否允许bean之间存在循环依赖
         if (this.allowCircularReferences != null) {
             beanFactory.setAllowCircularReferences(this.allowCircularReferences);
         }
