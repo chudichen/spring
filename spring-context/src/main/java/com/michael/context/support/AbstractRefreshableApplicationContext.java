@@ -1,6 +1,7 @@
 package com.michael.context.support;
 
 import com.michael.beans.BeansException;
+import com.michael.beans.factory.config.ConfigurableListableBeanFactory;
 import com.michael.beans.factory.support.DefaultListableBeanFactory;
 import com.michael.context.ApplicationContext;
 import com.michael.context.ApplicationContextException;
@@ -31,6 +32,14 @@ public abstract class AbstractRefreshableApplicationContext extends AbstractAppl
 
     public AbstractRefreshableApplicationContext(@Nullable ApplicationContext parent) {
         super(parent);
+    }
+
+    public void setAllowBeanDefinitionOverriding(boolean allowBeanDefinitionOverriding) {
+        this.allowBeanDefinitionOverriding = allowBeanDefinitionOverriding;
+    }
+
+    public void setAllowCircularReferences(boolean allowCircularReferences) {
+        this.allowCircularReferences = allowCircularReferences;
     }
 
     /**
@@ -68,6 +77,52 @@ public abstract class AbstractRefreshableApplicationContext extends AbstractAppl
         }
     }
 
+    @Override
+    protected void cancelRefresh(BeansException ex) {
+        synchronized (this.beanFactoryMonitor) {
+            if (this.beanFactory != null) {
+                this.beanFactory.setSerializationId(null);
+            }
+        }
+        super.cancelRefresh(ex);
+    }
+
+    @Override
+    protected void closeBeanFactory() {
+        synchronized (this.beanFactoryMonitor) {
+            if (this.beanFactory != null) {
+                this.beanFactory.setSerializationId(null);
+                this.beanFactory = null;
+            }
+        }
+    }
+
+    protected final boolean hasBeanFactory() {
+        synchronized (this.beanFactoryMonitor) {
+            return (this.beanFactory != null);
+        }
+    }
+
+    @Override
+    public final ConfigurableListableBeanFactory getBeanFactory() {
+        synchronized (this.beanFactoryMonitor) {
+            if (this.beanFactory == null) {
+                throw new IllegalStateException("BeanFactory not initialized or already closed - " +
+                        "call 'refresh' before accessing beans via the ApplicationContext");
+            }
+            return this.beanFactory;
+        }
+    }
+
+    @Override
+    protected void assertBeanFactoryActive() {
+    }
+
+
+    protected DefaultListableBeanFactory createBeanFactory() {
+        return new DefaultListableBeanFactory(getInternalParentBeanFactory());
+    }
+
     /**
      * 对BeanFactory进行扩展，在基本容器的基础上，增加了是否允许覆盖
      *
@@ -83,16 +138,6 @@ public abstract class AbstractRefreshableApplicationContext extends AbstractAppl
         // 此属性的含义：是否允许bean之间存在循环依赖
         if (this.allowCircularReferences != null) {
             beanFactory.setAllowCircularReferences(this.allowCircularReferences);
-        }
-    }
-
-    protected DefaultListableBeanFactory createBeanFactory() {
-        return new DefaultListableBeanFactory(getInternalParentBeanFactory());
-    }
-
-    protected final boolean hasBeanFactory() {
-        synchronized (this.beanFactoryMonitor) {
-            return (this.beanFactory != null);
         }
     }
 

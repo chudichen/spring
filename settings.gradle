@@ -4,7 +4,7 @@ include 'spring-core'
 include 'spring-context'
 include 'spring-jcl'
 include 'spring-test'
-include 'demo'
+include 'spring-demo'
 include 'spring-expression'
 
 // Exposes gradle buildSrc for IDE support

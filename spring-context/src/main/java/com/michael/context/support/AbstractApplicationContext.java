@@ -2,29 +2,32 @@ package com.michael.context.support;
 
 import com.michael.beans.BeansException;
 import com.michael.beans.factory.BeanFactory;
+import com.michael.beans.factory.NoSuchBeanDefinitionException;
+import com.michael.beans.factory.ObjectProvider;
 import com.michael.beans.factory.config.AutowireCapableBeanFactory;
 import com.michael.beans.factory.config.BeanFactoryPostProcessor;
 import com.michael.beans.factory.config.ConfigurableListableBeanFactory;
 import com.michael.commons.logging.Log;
 import com.michael.commons.logging.LogFactory;
-import com.michael.context.ApplicationContext;
-import com.michael.context.ApplicationEvent;
-import com.michael.context.ApplicationListener;
-import com.michael.context.ConfigurableApplicationContext;
+import com.michael.context.*;
+import com.michael.context.event.ApplicationEventMulticaster;
+import com.michael.context.event.ContextClosedEvent;
 import com.michael.context.expression.StandardBeanExpressionResolver;
+import com.michael.core.ResolvableType;
 import com.michael.core.env.ConfigurableEnvironment;
 import com.michael.core.env.Environment;
 import com.michael.core.env.StandardEnvironment;
 import com.michael.core.io.DefaultResourceLoader;
+import com.michael.core.io.Resource;
 import com.michael.core.io.support.PathMatchingResourcePatternResolver;
 import com.michael.core.io.support.ResourcePatternResolver;
 import com.michael.lang.Nullable;
+import com.michael.util.Assert;
 import com.michael.util.ObjectUtils;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.io.IOException;
+import java.lang.annotation.Annotation;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -38,17 +41,23 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 
     public static final String LIFECYCLE_PROCESSOR_BEAN_NAME = "lifecycleProcessor";
 
+    public static final String APPLICATION_EVENT_MULTICASTER_BEAN_NAME = "applicationEventMulticaster";
+
+    static {
+        ContextClosedEvent.class.getName();
+    }
+
     protected final Log logger = LogFactory.getLog(getClass());
+
+    private String id = ObjectUtils.identityToString(this);
 
     private String displayName = ObjectUtils.identityToString(this);
 
     @Nullable
-    private ConfigurableEnvironment environment;
-
-    @Nullable
     private ApplicationContext parent;
 
-    private final Object startupShutdownMonitor = new Object();
+    @Nullable
+    private ConfigurableEnvironment environment;
 
     private final List<BeanFactoryPostProcessor> beanFactoryPostProcessors = new ArrayList<>();
 
@@ -61,6 +70,11 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
     /** 这个context启动的时间戳 */
     private long startupDate;
 
+    private final Object startupShutdownMonitor = new Object();
+
+    @Nullable
+    private Thread shutdownHook;
+
     private ResourcePatternResolver resourcePatternResolver;
 
     private final Set<ApplicationListener<?>> applicationListeners = new LinkedHashSet<>();
@@ -69,7 +83,16 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
     private Set<ApplicationListener<?>> earlyApplicationListeners;
 
     @Nullable
+    private LifecycleProcessor lifecycleProcessor;
+
+    @Nullable
+    private MessageSource messageSource;
+
+    @Nullable
     private Set<ApplicationEvent> earlyApplicationEvents;
+
+    @Nullable
+    private ApplicationEventMulticaster applicationEventMulticaster;
 
     public AbstractApplicationContext() {
         this.resourcePatternResolver = getResourcePatternResolver();
@@ -80,8 +103,45 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
         setParent(parent);
     }
 
-    protected ResourcePatternResolver getResourcePatternResolver() {
-        return new PathMatchingResourcePatternResolver(this);
+
+    //---------------------------------------------------------------------
+    // Implementation of ApplicationContext interface
+    //---------------------------------------------------------------------
+
+    @Override
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    @Override
+    public String getId() {
+        return this.id;
+    }
+
+    @Override
+    public String getApplicationName() {
+        return "";
+    }
+
+    public void setDisplayName(String displayName) {
+        Assert.hasLength(displayName, "Display name must not be empty");
+        this.displayName = displayName;
+    }
+
+    @Override
+    public String getDisplayName() {
+        return this.displayName;
+    }
+
+    @Override
+    @Nullable
+    public ApplicationContext getParent() {
+        return this.parent;
+    }
+
+    @Override
+    public void setEnvironment(ConfigurableEnvironment environment) {
+        this.environment = environment;
     }
 
     @Override
@@ -91,6 +151,59 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
         }
         return this.environment;
     }
+
+    protected ConfigurableEnvironment createEnvironment() {
+        return new StandardEnvironment();
+    }
+
+    @Override
+    public AutowireCapableBeanFactory getAutowireCapableBeanFactory() throws IllegalStateException {
+        return getBeanFactory();
+    }
+
+    @Override
+    public long getStartupDate() {
+        return this.startupDate;
+    }
+
+    @Override
+    public void publishEvent(ApplicationEvent event) {
+        publishEvent(event, null);
+    }
+
+    @Override
+    public void publishEvent(Object event) {
+        publishEvent(event, null);
+    }
+
+    protected void publishEvent(Object event, @Nullable ResolvableType eventType) {
+
+    }
+
+    ApplicationEventMulticaster getApplicationEventMulticaster() throws IllegalStateException {
+        if (this.applicationEventMulticaster == null) {
+            throw new IllegalStateException("ApplicationEventMulticaster not initialized - " +
+                    "call 'refresh' before multicasting events via the context: " + this);
+        }
+        return this.applicationEventMulticaster;
+    }
+
+    LifecycleProcessor getLifecycleProcessor() throws IllegalStateException {
+        if (this.lifecycleProcessor == null) {
+            throw new IllegalStateException("LifecycleProcessor not initialized - " +
+                    "call 'refresh' before invoking lifecycle methods via the context: " + this);
+        }
+        return this.lifecycleProcessor;
+    }
+
+    protected ResourcePatternResolver getResourcePatternResolver() {
+        return new PathMatchingResourcePatternResolver(this);
+    }
+
+
+    //---------------------------------------------------------------------
+    // Implementation of ConfigurableApplicationContext interface
+    //---------------------------------------------------------------------
 
     public void setParent(@Nullable ApplicationContext parent) {
         this.parent = parent;
@@ -102,8 +215,27 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
         }
     }
 
-    protected ConfigurableEnvironment createEnvironment() {
-        return new StandardEnvironment();
+    @Override
+    public void addBeanFactoryPostProcessor(BeanFactoryPostProcessor postProcessor) {
+        Assert.notNull(postProcessor, "BeanFactoryPostProcessor must not be null");
+        this.beanFactoryPostProcessors.add(postProcessor);
+    }
+
+    public List<BeanFactoryPostProcessor> getBeanFactoryPostProcessors() {
+        return this.beanFactoryPostProcessors;
+    }
+
+    @Override
+    public void addApplicationListener(ApplicationListener<?> listener) {
+        Assert.notNull(listener, "ApplicationListener must not be null");
+        if (this.applicationEventMulticaster != null) {
+            this.applicationEventMulticaster.addApplicationListener(listener);
+        }
+        this.applicationListeners.add(listener);
+    }
+
+    public Collection<ApplicationListener<?>> getApplicationListeners() {
+        return this.applicationListeners;
     }
 
     /**
@@ -179,70 +311,6 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
         }
     }
 
-    protected void cancelRefresh(BeansException ex) {
-        this.active.set(false);
-    }
-
-    protected void finishRefresh() {
-
-    }
-
-    protected void finishBeanFactoryInitialization(ConfigurableListableBeanFactory beanFactory) {
-
-    }
-
-    protected void initMessageSource() {
-
-    }
-
-    protected void registerListeners() {
-
-    }
-
-    protected void onRefresh() throws BeansException {
-        // For subclasses: do nothing by default.
-    }
-
-    protected void initApplicationEventMulticaster() {
-
-    }
-
-    protected void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
-
-    }
-
-    protected void registerBeanPostProcessors(ConfigurableListableBeanFactory beanFactory) {
-        PostProcessorRegistrationDelegate.registerBeanPostProcessors(beanFactory, this);
-    }
-
-    protected void invokeBeanFactoryPostProcessors(ConfigurableListableBeanFactory beanFactory) {
-        PostProcessorRegistrationDelegate.invokeBeanFactoryPostProcessors(beanFactory, getBeanFactoryPostProcessors());
-    }
-
-    public List<BeanFactoryPostProcessor> getBeanFactoryPostProcessors() {
-        return this.beanFactoryPostProcessors;
-    }
-
-
-    /**
-     * 从字面意思上就是获取BeanFactory。ApplicationContext是对BeanFactory的功能上的扩展，
-     * 不但包含了BeanFactory的全部功能更在其基础上添加了大量的扩展应用，那么obtainFreshBeanFactory
-     * 正是实现BeanFactory的地方，也就是经过了这个函数后ApplicationContext就已经拥有了BeanFactory的全部功能。
-     *
-     * @return
-     */
-    protected ConfigurableListableBeanFactory obtainFreshBeanFactory() {
-        // 初始化BeanFactory，并进行XML文件读取，并将得到的BeanFactory记录在当前实体的属性中
-        refreshBeanFactory();
-        // 返回beanFactory
-        return getBeanFactory();
-    }
-
-    protected void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory) {
-        beanFactory.setBeanClassLoader(getClassLoader());
-        beanFactory.setBeanExpressionResolver(new StandardBeanExpressionResolver(beanFactory.getBeanClassLoader()));
-    }
-
     /**
      * 只要是做一些初始化准备工作，例如对系统属性及环境变量的初始化和验证。
      */
@@ -280,6 +348,90 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
      * 属性处理和设置。
      */
     protected void initPropertySources() {
+    }
+
+    /**
+     * 从字面意思上就是获取BeanFactory。ApplicationContext是对BeanFactory的功能上的扩展，
+     * 不但包含了BeanFactory的全部功能更在其基础上添加了大量的扩展应用，那么obtainFreshBeanFactory
+     * 正是实现BeanFactory的地方，也就是经过了这个函数后ApplicationContext就已经拥有了BeanFactory的全部功能。
+     *
+     * @return
+     */
+    protected ConfigurableListableBeanFactory obtainFreshBeanFactory() {
+        // 初始化BeanFactory，并进行XML文件读取，并将得到的BeanFactory记录在当前实体的属性中
+        refreshBeanFactory();
+        // 返回beanFactory
+        return getBeanFactory();
+    }
+
+    protected void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory) {
+        beanFactory.setBeanClassLoader(getClassLoader());
+        beanFactory.setBeanExpressionResolver(new StandardBeanExpressionResolver(beanFactory.getBeanClassLoader()));
+    }
+
+    protected void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {
+    }
+
+    protected void invokeBeanFactoryPostProcessors(ConfigurableListableBeanFactory beanFactory) {
+        PostProcessorRegistrationDelegate.invokeBeanFactoryPostProcessors(beanFactory, getBeanFactoryPostProcessors());
+    }
+
+    protected void registerBeanPostProcessors(ConfigurableListableBeanFactory beanFactory) {
+        PostProcessorRegistrationDelegate.registerBeanPostProcessors(beanFactory, this);
+    }
+
+    protected void initMessageSource() {
+
+    }
+
+    protected void initApplicationEventMulticaster() {
+
+    }
+
+    protected void initLifecycleProcessor() {
+
+    }
+
+    protected void onRefresh() throws BeansException {
+        // For subclasses: do nothing by default.
+    }
+
+    protected void registerListeners() {
+
+    }
+
+    protected void finishBeanFactoryInitialization(ConfigurableListableBeanFactory beanFactory) {
+
+    }
+
+    protected void finishRefresh() {
+
+    }
+
+    protected void cancelRefresh(BeansException ex) {
+        this.active.set(false);
+    }
+
+    protected void resetCommonCaches() {
+
+    }
+
+    @Override
+    public void registerShutdownHook() {
+
+    }
+
+    @Deprecated
+    public void destroy() {
+        close();
+    }
+
+    @Override
+    public void close() {
+
+    }
+
+    protected void doClose() {
 
     }
 
@@ -287,46 +439,338 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
         getBeanFactory().destroySingletons();
     }
 
+    protected void onClose() {
+        // For subclasses: do nothing by default.
+    }
+
+    @Override
+    public boolean isActive() {
+        return this.active.get();
+    }
+
+    protected void assertBeanFactoryActive() {
+        if (!this.active.get()) {
+            if (this.closed.get()) {
+                throw new IllegalStateException(getDisplayName() + " has been closed already");
+            }
+            else {
+                throw new IllegalStateException(getDisplayName() + " has not been refreshed yet");
+            }
+        }
+    }
+
+
+    //---------------------------------------------------------------------
+    // Implementation of BeanFactory interface
+    //---------------------------------------------------------------------
+
+    @Override
+    public Object getBean(String name) throws BeansException {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBean(name);
+    }
+
+    @Override
+    public <T> T getBean(String name, Class<T> requiredType) throws BeansException {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBean(name, requiredType);
+    }
+
+    @Override
+    public Object getBean(String name, Object... args) throws BeansException {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBean(name, args);
+    }
+
+    @Override
+    public <T> T getBean(Class<T> requiredType) throws BeansException {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBean(requiredType);
+    }
+
+    @Override
+    public <T> T getBean(Class<T> requiredType, Object... args) throws BeansException {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBean(requiredType, args);
+    }
+
+    @Override
+    public <T> ObjectProvider<T> getBeanProvider(Class<T> requiredType) {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBeanProvider(requiredType);
+    }
+
+    @Override
+    public <T> ObjectProvider<T> getBeanProvider(ResolvableType requiredType) {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBeanProvider(requiredType);
+    }
+
+    @Override
+    public boolean containsBean(String name) {
+        return getBeanFactory().containsBean(name);
+    }
+
+    @Override
+    public boolean isSingleton(String name) throws NoSuchBeanDefinitionException {
+        assertBeanFactoryActive();
+        return getBeanFactory().isSingleton(name);
+    }
+
+    @Override
+    public boolean isPrototype(String name) throws NoSuchBeanDefinitionException {
+        assertBeanFactoryActive();
+        return getBeanFactory().isPrototype(name);
+    }
+
+    @Override
+    public boolean isTypeMatch(String name, ResolvableType typeToMatch) throws NoSuchBeanDefinitionException {
+        assertBeanFactoryActive();
+        return getBeanFactory().isTypeMatch(name, typeToMatch);
+    }
+
+    @Override
+    public boolean isTypeMatch(String name, Class<?> typeToMatch) throws NoSuchBeanDefinitionException {
+        assertBeanFactoryActive();
+        return getBeanFactory().isTypeMatch(name, typeToMatch);
+    }
+
+    @Override
+    @Nullable
+    public Class<?> getType(String name) throws NoSuchBeanDefinitionException {
+        assertBeanFactoryActive();
+        return getBeanFactory().getType(name);
+    }
+
+    @Override
+    public String[] getAliases(String name) {
+        return getBeanFactory().getAliases(name);
+    }
+
+
+    //---------------------------------------------------------------------
+    // Implementation of ListableBeanFactory interface
+    //---------------------------------------------------------------------
+
+    @Override
+    public boolean containsBeanDefinition(String beanName) {
+        return getBeanFactory().containsBeanDefinition(beanName);
+    }
+
+    @Override
+    public int getBeanDefinitionCount() {
+        return getBeanFactory().getBeanDefinitionCount();
+    }
+
+    @Override
+    public String[] getBeanDefinitionNames() {
+        return getBeanFactory().getBeanDefinitionNames();
+    }
+
+    @Override
+    public String[] getBeanNamesForType(ResolvableType type) {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBeanNamesForType(type);
+    }
+
+    @Override
+    public String[] getBeanNamesForType(@Nullable Class<?> type) {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBeanNamesForType(type);
+    }
+
+    @Override
+    public String[] getBeanNamesForType(@Nullable Class<?> type, boolean includeNonSingletons, boolean allowEagerInit) {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBeanNamesForType(type, includeNonSingletons, allowEagerInit);
+    }
+
+    @Override
+    public <T> Map<String, T> getBeansOfType(@Nullable Class<T> type) throws BeansException {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBeansOfType(type);
+    }
+
+    @Override
+    public <T> Map<String, T> getBeansOfType(@Nullable Class<T> type, boolean includeNonSingletons, boolean allowEagerInit)
+            throws BeansException {
+
+        assertBeanFactoryActive();
+        return getBeanFactory().getBeansOfType(type, includeNonSingletons, allowEagerInit);
+    }
+
+    @Override
+    public String[] getBeanNamesForAnnotation(Class<? extends Annotation> annotationType) {
+        assertBeanFactoryActive();
+        return getBeanFactory().getBeanNamesForAnnotation(annotationType);
+    }
+
+    @Override
+    public Map<String, Object> getBeansWithAnnotation(Class<? extends Annotation> annotationType)
+            throws BeansException {
+
+        assertBeanFactoryActive();
+        return getBeanFactory().getBeansWithAnnotation(annotationType);
+    }
+
+    @Override
+    @Nullable
+    public <A extends Annotation> A findAnnotationOnBean(String beanName, Class<A> annotationType)
+            throws NoSuchBeanDefinitionException {
+
+        assertBeanFactoryActive();
+        return getBeanFactory().findAnnotationOnBean(beanName, annotationType);
+    }
+
+
+    //---------------------------------------------------------------------
+    // Implementation of HierarchicalBeanFactory interface
+    //---------------------------------------------------------------------
+
+    @Override
+    @Nullable
+    public BeanFactory getParentBeanFactory() {
+        return getParent();
+    }
+
+    @Override
+    public boolean containsLocalBean(String name) {
+        return getBeanFactory().containsLocalBean(name);
+    }
+
+
     protected BeanFactory getInternalParentBeanFactory() {
         return (getParent() instanceof ConfigurableApplicationContext ?
                 ((ConfigurableApplicationContext) getParent()).getBeanFactory() : getParent());
     }
 
+
+    //---------------------------------------------------------------------
+    // Implementation of MessageSource interface
+    //---------------------------------------------------------------------
+
+    @Override
+    public String getMessage(String code, @Nullable Object[] args, @Nullable String defaultMessage, Locale locale) {
+        return getMessageSource().getMessage(code, args, defaultMessage, locale);
+    }
+
+    @Override
+    public String getMessage(String code, @Nullable Object[] args, Locale locale) throws NoSuchMessageException {
+        return getMessageSource().getMessage(code, args, locale);
+    }
+
+    @Override
+    public String getMessage(MessageSourceResolvable resolvable, Locale locale) throws NoSuchMessageException {
+        return getMessageSource().getMessage(resolvable, locale);
+    }
+
+    /**
+     * Return the internal MessageSource used by the context.
+     * @return the internal MessageSource (never {@code null})
+     * @throws IllegalStateException if the context has not been initialized yet
+     */
+    private MessageSource getMessageSource() throws IllegalStateException {
+        if (this.messageSource == null) {
+            throw new IllegalStateException("MessageSource not initialized - " +
+                    "call 'refresh' before accessing messages via the context: " + this);
+        }
+        return this.messageSource;
+    }
+
+    /**
+     * Return the internal message source of the parent context if it is an
+     * AbstractApplicationContext too; else, return the parent context itself.
+     */
+    @Nullable
+    protected MessageSource getInternalParentMessageSource() {
+        return (getParent() instanceof AbstractApplicationContext ?
+                ((AbstractApplicationContext) getParent()).messageSource : getParent());
+    }
+
+
+    //---------------------------------------------------------------------
+    // Implementation of ResourcePatternResolver interface
+    //---------------------------------------------------------------------
+
+    @Override
+    public Resource[] getResources(String locationPattern) throws IOException {
+        return this.resourcePatternResolver.getResources(locationPattern);
+    }
+
+
+    //---------------------------------------------------------------------
+    // Implementation of Lifecycle interface
+    //---------------------------------------------------------------------
+
+    @Override
+    public void start() {
+        getLifecycleProcessor().start();
+        publishEvent(new ContextStartedEvent(this));
+    }
+
+    @Override
+    public void stop() {
+        getLifecycleProcessor().stop();
+        publishEvent(new ContextStoppedEvent(this));
+    }
+
+    @Override
+    public boolean isRunning() {
+        return (this.lifecycleProcessor != null && this.lifecycleProcessor.isRunning());
+    }
+
+
+    //---------------------------------------------------------------------
+    // Abstract methods that must be implemented by subclasses
+    //---------------------------------------------------------------------
+
+    /**
+     * Subclasses must implement this method to perform the actual configuration load.
+     * The method is invoked by {@link #refresh()} before any other initialization work.
+     * <p>A subclass will either create a new bean factory and hold a reference to it,
+     * or return a single BeanFactory instance that it holds. In the latter case, it will
+     * usually throw an IllegalStateException if refreshing the context more than once.
+     * @throws BeansException if initialization of the bean factory failed
+     * @throws IllegalStateException if already initialized and multiple refresh
+     * attempts are not supported
+     */
     protected abstract void refreshBeanFactory() throws BeansException, IllegalStateException;
 
+    /**
+     * Subclasses must implement this method to release their internal bean factory.
+     * This method gets invoked by {@link #close()} after all other shutdown work.
+     * <p>Should never throw an exception but rather log shutdown failures.
+     */
     protected abstract void closeBeanFactory();
 
+    /**
+     * Subclasses must return their internal bean factory here. They should implement the
+     * lookup efficiently, so that it can be called repeatedly without a performance penalty.
+     * <p>Note: Subclasses should check whether the context is still active before
+     * returning the internal bean factory. The internal factory should generally be
+     * considered unavailable once the context has been closed.
+     * @return this application context's internal bean factory (never {@code null})
+     * @throws IllegalStateException if the context does not hold an internal bean factory yet
+     * (usually if {@link #refresh()} has never been called) or if the context has been
+     * closed already
+     * @see #refreshBeanFactory()
+     * @see #closeBeanFactory()
+     */
     @Override
     public abstract ConfigurableListableBeanFactory getBeanFactory() throws IllegalStateException;
 
-    @Override
-    public String getId() {
-        return null;
-    }
 
+    /**
+     * Return information about this context.
+     */
     @Override
-    public String getApplicationName() {
-        return null;
-    }
-
-    @Override
-    public String getDisplayName() {
-        return this.displayName;
-    }
-
-    @Override
-    public long getStartupDate() {
-        return 0;
-    }
-
-    @Nullable
-    @Override
-    public ApplicationContext getParent() {
-        return null;
-    }
-
-    @Override
-    public AutowireCapableBeanFactory getAutowireCapableBeanFactory() throws IllegalStateException {
-        return null;
+    public String toString() {
+        StringBuilder sb = new StringBuilder(getDisplayName());
+        sb.append(", started on ").append(new Date(getStartupDate()));
+        ApplicationContext parent = getParent();
+        if (parent != null) {
+            sb.append(", parent: ").append(parent.getDisplayName());
+        }
+        return sb.toString();
     }
 }

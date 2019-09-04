@@ -3,7 +3,6 @@ package com.michael.context.support;
 import com.michael.beans.BeansException;
 import com.michael.context.ApplicationContext;
 import com.michael.core.io.Resource;
-import com.michael.util.Assert;
 import com.michael.lang.Nullable;
 
 /**
@@ -11,7 +10,6 @@ import com.michael.lang.Nullable;
  * @since 2019-08-22 20:46
  */
 public class ClassPathXmlApplicationContext extends AbstractXmlApplicationContext {
-
 
     @Nullable
     private Resource[] configResources;
@@ -50,5 +48,11 @@ public class ClassPathXmlApplicationContext extends AbstractXmlApplicationContex
         if (refresh) {
             refresh();
         }
+    }
+
+    @Override
+    @Nullable
+    public Resource[] getConfigResources() {
+        return this.configResources;
     }
 }

@@ -35,4 +35,10 @@ public abstract class Assert {
             throw new IllegalArgumentException(message);
         }
     }
+
+    public static void hasLength(@Nullable String text, String message) {
+        if (!StringUtils.hasLength(text)) {
+            throw new IllegalArgumentException(message);
+        }
+    }
 }

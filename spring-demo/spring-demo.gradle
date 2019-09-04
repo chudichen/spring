@@ -1,19 +1,15 @@
-plugins {
-    id 'java'
-}
+apply plugin : 'java'
 
 group 'com.michael'
-version 'unspecified'
+description 'spring project'
 
-sourceCompatibility = 1.8
-
-repositories {
-    mavenCentral()
-}
+sourceCompatibility = 11
+targetCompatibility = 11
 
 dependencies {
     compile(project(":spring-beans"))
     compile(project(":spring-core"))
     compile(project(":spring-context"))
+    compile(project(":spring-expression"))
     compile(project(":spring-jcl"))
 }

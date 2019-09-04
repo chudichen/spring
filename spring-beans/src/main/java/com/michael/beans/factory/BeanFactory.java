@@ -1,6 +1,8 @@
 package com.michael.beans.factory;
 
 import com.michael.beans.BeansException;
+import com.michael.core.ResolvableType;
+import com.michael.lang.Nullable;
 
 /**
  * 定义bean以及bean的各种属性
@@ -16,7 +18,28 @@ public interface BeanFactory {
 
     <T> T getBean(String name, Class<T> requireType) throws BeansException;
 
+    Object getBean(String name, Object... args) throws BeansException;
+
+    <T> T getBean(Class<T> requiredType) throws BeansException;
+
+    <T> T getBean(Class<T> requiredType, Object... args) throws BeansException;
+
+    <T> ObjectProvider<T> getBeanProvider(Class<T> requiredType);
+
+    <T> ObjectProvider<T> getBeanProvider(ResolvableType requiredType);
+
     boolean containsBean(String name);
 
+    boolean isSingleton(String name) throws NoSuchBeanDefinitionException;
+
+    boolean isPrototype(String name) throws NoSuchBeanDefinitionException;
+
+    boolean isTypeMatch(String name, ResolvableType typeToMatch) throws NoSuchBeanDefinitionException;
+
     boolean isTypeMatch(String name, Class<?> typeToMatch) throws NoSuchBeanDefinitionException;
+
+    @Nullable
+    Class<?> getType(String name) throws NoSuchBeanDefinitionException;
+
+    String[] getAliases(String name);
 }

@@ -5,6 +5,7 @@ import com.michael.beans.factory.InitializingBean;
 import com.michael.context.ApplicationContext;
 import com.michael.util.Assert;
 import com.michael.lang.Nullable;
+import com.michael.util.StringUtils;
 
 /**
  * @author Michael Chu
@@ -23,6 +24,10 @@ public abstract class AbstractRefreshableConfigApplicationContext extends Abstra
 
     public AbstractRefreshableConfigApplicationContext(@Nullable ApplicationContext parent) {
         super(parent);
+    }
+
+    public void setConfigLocation(String location) {
+        setConfigLocations(StringUtils.tokenizeToStringArray(location, CONFIG_LOCATION_DELIMITERS));
     }
 
     /**
@@ -55,4 +60,26 @@ public abstract class AbstractRefreshableConfigApplicationContext extends Abstra
     protected String resolvePath(String path) {
         return getEnvironment().resolveRequiredPlaceholders(path);
     }
+
+    @Override
+    public void setId(String id) {
+        super.setId(id);
+        this.setIdCalled = true;
+    }
+
+    @Override
+    public void setBeanName(String name) {
+        if (!this.setIdCalled) {
+            super.setId(name);
+            setDisplayName("ApplicationContext '" + name + "'");
+        }
+    }
+
+    @Override
+    public void afterPropertiesSet() {
+        if (!isActive()) {
+            refresh();
+        }
+    }
+
 }
