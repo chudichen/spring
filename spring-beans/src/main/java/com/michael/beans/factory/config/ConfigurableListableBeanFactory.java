@@ -17,6 +17,7 @@ public interface ConfigurableListableBeanFactory
 
     void registerResolvableDependency(Class<?> dependencyType, @Nullable Object autowiredValue);
 
+    @Override
     void setBeanExpressionResolver(@Nullable BeanExpressionResolver resolver);
 
     boolean isAutowireCandidate(String beanName, DependencyDescriptor descriptor)

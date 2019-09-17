@@ -12,6 +12,9 @@ import com.michael.lang.Nullable;
  */
 public interface BeanFactory {
 
+    /**
+     * 用来区别{@link FactoryBean}
+     */
     String FACTORY_BEAN_PREFIX = "&";
 
     Object getBean(String name) throws BeansException;
