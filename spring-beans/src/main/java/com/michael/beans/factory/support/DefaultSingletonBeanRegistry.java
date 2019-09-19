@@ -1,12 +1,11 @@
 package com.michael.beans.factory.support;
 
-import com.michael.beans.factory.BeanCreationException;
-import com.michael.beans.factory.BeanCreationNotAllowedException;
-import com.michael.beans.factory.ObjectFactory;
+import com.michael.beans.factory.*;
 import com.michael.beans.factory.config.SingletonBeanRegistry;
 import com.michael.core.SimpleAliasRegistry;
 import com.michael.lang.Nullable;
 import com.michael.util.Assert;
+import com.michael.util.StringUtils;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -182,23 +181,307 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
         }
     }
 
+    /**
+     * 注册异常
+     */
+    protected void onSuppressedException(Exception ex) {
+        synchronized (this.singletonObjects) {
+            if (this.suppressedExceptions != null) {
+                this.suppressedExceptions.add(ex);
+            }
+        }
+    }
+
+    /**
+     * 删除指定名称的singleton对象，为了清空那些已经失败的提前暴露对象
+     *
+     * @param beanName 给定beanName
+     */
+    protected void removeSingleton(String beanName) {
+        synchronized (this.singletonObjects) {
+            this.singletonObjects.remove(beanName);
+            this.singletonFactories.remove(beanName);
+            this.earlySingletonObjects.remove(beanName);
+            this.registeredSingletons.remove(beanName);
+        }
+    }
+
     @Override
     public boolean containsSingleton(String beanName) {
-        return false;
+        return this.singletonObjects.containsKey(beanName);
     }
 
     @Override
     public String[] getSingletonNames() {
-        return new String[0];
+        synchronized (this.singletonObjects) {
+            return StringUtils.toStringArray(this.registeredSingletons);
+        }
     }
 
     @Override
     public int getSingletonCount() {
-        return 0;
+        synchronized (this.singletonObjects) {
+            return this.registeredSingletons.size();
+        }
+    }
+
+    public void setCurrentlyInCreation(String beanName, boolean inCreation) {
+        Assert.notNull(beanName, "Bean name must not be null");
+        if (!inCreation) {
+            this.inCreationCheckExclusions.add(beanName);
+        } else {
+            this.inCreationCheckExclusions.remove(beanName);
+        }
+    }
+
+    public boolean isCurrentlyInCreation(String beanName) {
+        Assert.notNull(beanName, "Bean name must not be null");
+        return (!this.inCreationCheckExclusions.contains(beanName) && isActuallyInCreation(beanName));
+    }
+
+    protected boolean isActuallyInCreation(String beanName) {
+        return isSingletonCurrentlyInCreation(beanName);
+    }
+
+    /**
+     * 查询指定名称的单例对象是否正在被建造
+     *
+     * @param beanName bean的名称
+     * @return 是否正在被建造
+     */
+    public boolean isSingletonCurrentlyInCreation(String beanName) {
+        return this.singletonsCurrentlyInCreation.contains(beanName);
+    }
+
+    /**
+     * 记录加载状态，也就是通过this.singletonsCurrentlyInCreation.add(beanName)
+     * 将当前正要创建的bean记录在缓存中，这样可以对循环依赖进行检测。
+     *
+     * @param beanName
+     */
+    protected void beforeSingletonCreation(String beanName) {
+        if (!this.inCreationCheckExclusions.contains(beanName) && !this.singletonsCurrentlyInCreation.add(beanName)) {
+            throw new BeanCurrentlyInCreationException(beanName);
+        }
+    }
+
+    protected void afterSingletonCreation(String beanName) {
+        if (!this.inCreationCheckExclusions.contains(beanName) && !this.singletonsCurrentlyInCreation.remove(beanName)) {
+            throw new IllegalStateException("Singleton '" + beanName + "' isn't currently in creation");
+        }
+    }
+
+    public void registerDisposableBean(String beanName, DisposableBean bean) {
+        synchronized (this.disposableBeans) {
+            this.disposableBeans.put(beanName, bean);
+        }
+    }
+
+    public void registerContainedBean(String containedBeanName, String containingBeanName) {
+        synchronized (this.containedBeanMap) {
+            Set<String> containedBeans =
+                    this.containedBeanMap.computeIfAbsent(containingBeanName, k -> new LinkedHashSet<>(8));
+            if (!containedBeans.add(containedBeanName)) {
+                return;
+            }
+        }
+        registerDependentBean(containedBeanName, containingBeanName);
+    }
+
+    public void registerDependentBean(String beanName, String dependentBeanName) {
+        String canonicalName = canonicalName(beanName);
+
+        synchronized (this.dependentBeanMap) {
+            Set<String> dependentBeans =
+                    this.dependentBeanMap.computeIfAbsent(canonicalName, k -> new LinkedHashSet<>(8));
+            if (!dependentBeans.add(dependentBeanName)) {
+                return;
+            }
+        }
+
+        synchronized (this.dependenciesForBeanMap) {
+            Set<String> dependenciesForBean =
+                    this.dependenciesForBeanMap.computeIfAbsent(dependentBeanName, k -> new LinkedHashSet<>(8));
+            dependenciesForBean.add(canonicalName);
+        }
+    }
+
+    /**
+     * 判断指定的beanName，是否有依赖于dependentBeanName的bean或者其传递的bean。
+     *
+     * @param beanName
+     * @param dependentBeanName
+     * @return
+     */
+    protected boolean isDependent(String beanName, String dependentBeanName) {
+        synchronized (this.dependentBeanMap) {
+            return isDependent(beanName, dependentBeanName, null);
+        }
+    }
+
+    private boolean isDependent(String beanName, String dependentBeanName, @Nullable Set<String> alreadySeen) {
+        if (alreadySeen != null && alreadySeen.contains(beanName)) {
+            return false;
+        }
+        String canonicalName = canonicalName(beanName);
+        Set<String> dependentBeans = this.dependentBeanMap.get(canonicalName);
+        if (dependentBeans == null) {
+            return false;
+        }
+        if (dependentBeans.contains(dependentBeanName)) {
+            return true;
+        }
+        for (String transitiveDependency : dependentBeans) {
+            if (alreadySeen == null) {
+                alreadySeen = new HashSet<>();
+            }
+            alreadySeen.add(beanName);
+            if (isDependent(transitiveDependency, dependentBeanName, alreadySeen)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 指定名称是否已经被注册了
+     *
+     * @param beanName 被检测的名称
+     * @return 是否被注册
+     */
+    protected boolean hasDependentBean(String beanName) {
+        return this.dependentBeanMap.containsKey(beanName);
+    }
+
+    /**
+     * 返回依赖与该beanName的所有bean
+     *
+     * @param beanName 指定名称
+     * @return 所有依赖bean的name，没有为空
+     */
+    public String[] getDependentBeans(String beanName) {
+        Set<String> dependentBeans = this.dependentBeanMap.get(beanName);
+        if (dependentBeans == null) {
+            return new String[0];
+        }
+        synchronized (this.dependentBeanMap) {
+            return StringUtils.toStringArray(dependentBeans);
+        }
+    }
+
+    public String[] getDependenciesForBean(String beanName) {
+        Set<String> dependenciesForBean = this.dependenciesForBeanMap.get(beanName);
+        if (dependenciesForBean == null) {
+            return new String[0];
+        }
+        synchronized (this.dependenciesForBeanMap) {
+            return StringUtils.toStringArray(dependenciesForBean);
+        }
+    }
+
+    public void destroySingletons() {
+        if (logger.isTraceEnabled()) {
+            logger.trace("Destroying singletons in " + this);
+        }
+        synchronized (this.singletonObjects) {
+            this.singletonsCurrentlyInDestruction = true;
+        }
+
+        String[] disposableBeanNames;
+        synchronized (this.disposableBeans) {
+            disposableBeanNames = StringUtils.toStringArray(this.disposableBeans.keySet());
+        }
+        for (int i = disposableBeanNames.length - 1; i >= 0; i--) {
+            destroySingleton(disposableBeanNames[i]);
+        }
+
+        this.containedBeanMap.clear();
+        this.dependentBeanMap.clear();
+        this.dependenciesForBeanMap.clear();
+
+        clearSingletonCache();
+    }
+
+    protected void clearSingletonCache() {
+        synchronized (this.singletonObjects) {
+            this.singletonObjects.clear();
+            this.singletonFactories.clear();
+            this.earlySingletonObjects.clear();
+            this.registeredSingletons.clear();
+            this.singletonsCurrentlyInDestruction = false;
+        }
+    }
+
+    public void destroySingleton(String beanName) {
+        // Remove a registered singleton of the given name, if any.
+        removeSingleton(beanName);
+
+        // Destroy the corresponding DisposableBean instance.
+        DisposableBean disposableBean;
+        synchronized (this.disposableBeans) {
+            disposableBean = (DisposableBean) this.disposableBeans.remove(beanName);
+        }
+        destroyBean(beanName, disposableBean);
+    }
+
+    protected void destroyBean(String beanName, @Nullable DisposableBean bean) {
+        // Trigger destruction of dependent beans first...
+        Set<String> dependencies;
+        synchronized (this.dependentBeanMap) {
+            // Within full synchronization in order to guarantee a disconnected Set
+            dependencies = this.dependentBeanMap.remove(beanName);
+        }
+        if (dependencies != null) {
+            if (logger.isTraceEnabled()) {
+                logger.trace("Retrieved dependent beans for bean '" + beanName + "': " + dependencies);
+            }
+            for (String dependentBeanName : dependencies) {
+                destroySingleton(dependentBeanName);
+            }
+        }
+
+        // Actually destroy the bean now...
+        if (bean != null) {
+            try {
+                bean.destroy();
+            }
+            catch (Throwable ex) {
+                if (logger.isWarnEnabled()) {
+                    logger.warn("Destruction of bean with name '" + beanName + "' threw an exception", ex);
+                }
+            }
+        }
+
+        // Trigger destruction of contained beans...
+        Set<String> containedBeans;
+        synchronized (this.containedBeanMap) {
+            // Within full synchronization in order to guarantee a disconnected Set
+            containedBeans = this.containedBeanMap.remove(beanName);
+        }
+        if (containedBeans != null) {
+            for (String containedBeanName : containedBeans) {
+                destroySingleton(containedBeanName);
+            }
+        }
+
+        // Remove destroyed bean from other beans' dependencies.
+        synchronized (this.dependentBeanMap) {
+            for (Iterator<Map.Entry<String, Set<String>>> it = this.dependentBeanMap.entrySet().iterator(); it.hasNext();) {
+                Map.Entry<String, Set<String>> entry = it.next();
+                Set<String> dependenciesToClean = entry.getValue();
+                dependenciesToClean.remove(beanName);
+                if (dependenciesToClean.isEmpty()) {
+                    it.remove();
+                }
+            }
+        }
+
+        // Remove destroyed bean's prepared dependency information.
+        this.dependenciesForBeanMap.remove(beanName);
     }
 
     @Override
     public Object getSingletonMutex() {
-        return null;
+        return this.singletonObjects;
     }
 }

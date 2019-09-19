@@ -3,10 +3,12 @@ package com.michael.beans.factory.support;
 import com.michael.beans.factory.BeanFactory;
 import com.michael.beans.factory.config.ConfigurableListableBeanFactory;
 import com.michael.lang.Nullable;
+import com.michael.util.ClassUtils;
 
 import java.io.Serializable;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -20,12 +22,37 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
         implements ConfigurableListableBeanFactory, BeanDefinitionRegistry, Serializable {
 
     @Nullable
-    private String serializationId;
+    private static Class<?> javaxInjectProviderClass;
 
-    private boolean allowBeanDefinitionOverriding = true;
+    static {
+        try {
+            javaxInjectProviderClass =
+                    ClassUtils.forName("javax.inject.Provider", DefaultListableBeanFactory.class.getClassLoader());
+        } catch (ClassNotFoundException ex) {
+            javaxInjectProviderClass = null;
+        }
+    }
 
+    /** 工厂的serializableId */
     private static final Map<String, Reference<DefaultListableBeanFactory>> serializableFactories =
             new ConcurrentHashMap<>(8);
+
+    /** 工厂的serializationId，可选项，用于序列化 */
+    @Nullable
+    private String serializationId;
+
+    /** 通过同样的name，重复注册 */
+    private boolean allowBeanDefinitionOverriding = true;
+
+    /** 是否允许提前加载，甚至对于懒加载的bean */
+    private boolean allowEagerClassLoading = true;
+
+    /** 比较器 */
+    @Nullable
+    private Comparator<Object> dependencyComparator;
+
+    /** 自动装配检测的解析器 */
+    private AutowireCandidateResolver autowireCandidateResolver = new SimpleAutowireCandidateResolver();
 
     public DefaultListableBeanFactory() {
         super();
