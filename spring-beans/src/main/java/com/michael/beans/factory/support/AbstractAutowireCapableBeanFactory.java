@@ -12,6 +12,9 @@ import com.michael.lang.Nullable;
 public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFactory
         implements AutowireCapableBeanFactory {
 
+    /** 创建bean实例的策略 */
+    private InstantiationStrategy instantiationStrategy = new CglibSubclassingInstantiationStrategy();
+
     private boolean allowCircularReferences = true;
 
     public AbstractAutowireCapableBeanFactory() {
