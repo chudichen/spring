@@ -1,11 +1,99 @@
 apply plugin : 'java'
 
+ext {
+    kotlinVersion        = "1.3.41"
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        url 'http://maven.aliyun.com/nexus/content/groups/public/'
+    }
+}
+
+def cglibVersion = "3.2.11"
+def objenesisVersion = "3.0.1"
+
+configurations {
+    jarjar
+    cglib
+    objenesis
+    coroutines {
+        transitive = false
+    }
+}
+
+task cglibRepackJar(type: Jar) { repackJar ->
+    repackJar.baseName = "spring-cglib-repack"
+    repackJar.version = cglibVersion
+
+    doLast() {
+        project.ant {
+            taskdef name: "jarjar", classname: "org.pantsbuild.jarjar.JarJarTask",
+                    classpath: configurations.jarjar.asPath
+            jarjar(destfile: repackJar.archivePath) {
+                configurations.cglib.each { originalJar ->
+                    zipfileset(src: originalJar)
+                }
+                // Repackage net.sf.cglib => org.springframework.cglib
+                rule(pattern: "net.sf.cglib.**", result: "com.michael.cglib.@1")
+                // As mentioned above, transform cglib's internal asm dependencies from
+                // org.objectweb.asm => org.springframework.asm. Doing this counts on the
+                // the fact that Spring and cglib depend on the same version of asm!
+                rule(pattern: "org.objectweb.asm.**", result: "com.michael.asm.@1")
+            }
+        }
+    }
+}
+
+task objenesisRepackJar(type: Jar) { repackJar ->
+    repackJar.baseName = "spring-objenesis-repack"
+    repackJar.version = objenesisVersion
+
+    doLast() {
+        project.ant {
+            taskdef name: "jarjar", classname: "org.pantsbuild.jarjar.JarJarTask",
+                    classpath: configurations.jarjar.asPath
+            jarjar(destfile: repackJar.archivePath) {
+                configurations.objenesis.each { originalJar ->
+                    zipfileset(src: originalJar)
+                }
+                // Repackage org.objenesis => org.springframework.objenesis
+                rule(pattern: "org.objenesis.**", result: "org.springframework.objenesis.@1")
+            }
+        }
+    }
+}
+
 dependencies {
+    jarjar("org.pantsbuild:jarjar:1.7.2")
     compile 'javax.servlet:servlet-api:2.5'
     compile 'com.google.code.findbugs:jsr305:2.0.1'
-    compile(project(":spring-beans"))
     compile(project(":spring-jcl"))
+    compile("org.jetbrains.kotlin:kotlin-reflect:1.3.41")
     compile group: 'junit', name: 'junit', version: '4.12'
+}
+
+jar {
+    // Inline repackaged cglib classes directly into spring-core jar
+    dependsOn cglibRepackJar
+    from(zipTree(cglibRepackJar.archivePath)) {
+        include "com/michael/cglib/**"
+        exclude "com/michael/cglib/core/AbstractClassGenerator*.class"
+        exclude "com/michael/cglib/core/AsmApi*.class"
+        exclude "com/michael/cglib/core/KeyFactory.class"
+        exclude "com/michael/cglib/core/KeyFactory\$*.class"
+        exclude "com/michael/cglib/core/ReflectUtils*.class"
+        exclude "com/michael/cglib/proxy/Enhancer*.class"
+        exclude "com/michael/cglib/proxy/MethodProxy*.class"
+    }
+
+    dependsOn objenesisRepackJar
+    from(zipTree(objenesisRepackJar.archivePath)) {
+        include "com/michael/objenesis/**"
+    }
+
+    from { configurations.coroutines.collect { it.isDirectory() ? it : zipTree(it) } }
 }
 
 
